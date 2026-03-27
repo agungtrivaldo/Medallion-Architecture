@@ -38,7 +38,7 @@ services:
         -Djavax.jdo.option.ConnectionUserName=hive
         -Djavax.jdo.option.ConnectionPassword=hivepassword
     ports:
-      - "9083:9083"
+      - "10.8.0.1:9083:9083"
     volumes:
       - ./postgresql-42.7.6.jar:/opt/hive/lib/postgresql-42.7.6.jar
       - ./hive-config/hive-site.xml:/opt/hive/conf/hive-site.xml
