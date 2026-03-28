@@ -4,35 +4,25 @@ import random
 from faker import Faker
 from datetime import datetime, timedelta
 
-# Menggunakan locale Indonesia
 fake = Faker('id_ID')
 
-# ==========================================
-# KONFIGURASI DATABASE (Sesuai Docker Compose)
-# ==========================================
 DB_CONFIG = {
     'dbname': 'source_db',
     'user': 'admin',
     'password': 'password123',
-    'host': 'localhost', # Berjalan di VPS yang sama dengan Docker
+    'host': 'localhost',
     'port': '5432'
 }
 
-# ==========================================
-# PENGATURAN SKALA DATA (Bisa kamu ubah nanti)
-# ==========================================
 NUM_USERS = 10_000
-NUM_ORDERS = 50_000  # Menghasilkan puluhan ribu transaksi (Aman untuk RAM 8GB)
+NUM_ORDERS = 50_000
 START_DATE = datetime(2025, 1, 1)
 END_DATE = datetime(2026, 3, 27)
 
 def create_tables(cursor):
-    print("Membangun 9 Tabel Skema E-Commerce...")
-    # CASCADE digunakan agar jika kita re-run script ini, tabel lama terhapus bersih
     cursor.execute("""
         DROP TABLE IF EXISTS shipping, payments, order_items, orders, products, categories, brands, user_addresses, users CASCADE;
 
-        -- 1. DATA MASTER
         CREATE TABLE users (
             user_id SERIAL PRIMARY KEY, 
             email VARCHAR(255), 
@@ -67,8 +57,6 @@ def create_tables(cursor):
             weight_grams INT, 
             updated_at TIMESTAMP
         );
-
-        -- 2. DATA TRANSAKSI
         CREATE TABLE orders (
             order_id VARCHAR(50) PRIMARY KEY, 
             user_id INT REFERENCES users(user_id), 
@@ -84,8 +72,6 @@ def create_tables(cursor):
             quantity INT, 
             unit_price_at_purchase DECIMAL
         );
-
-        -- 3. DATA OPERASIONAL
         CREATE TABLE payments (
             payment_id SERIAL PRIMARY KEY, 
             order_id VARCHAR(50) REFERENCES orders(order_id), 
@@ -107,8 +93,6 @@ def random_date(start, end):
     return start + timedelta(seconds=random.randint(0, int((end - start).total_seconds())))
 
 def generate_master_data(cursor):
-    print("Insert Data Master (Brands, Categories, Products)...")
-    
     brands = [
         ('Asus', 'Taiwan'), ('MSI', 'Taiwan'), ('Gigabyte', 'Taiwan'), 
         ('Samsung', 'South Korea'), ('Apple', 'USA'), ('Poco', 'China'), 
@@ -135,7 +119,6 @@ def generate_master_data(cursor):
     extras.execute_values(cursor, "INSERT INTO products (category_id, brand_id, product_name, base_price, weight_grams, updated_at) VALUES %s", products)
 
 def generate_users(cursor):
-    print(f"Insert {NUM_USERS} Users & Addresses...")
     users = []
     addresses = []
     
@@ -143,18 +126,13 @@ def generate_users(cursor):
         dt = random_date(START_DATE, END_DATE)
         users.append((fake.email(), fake.password(), fake.phone_number(), dt, dt))
         
-        # Tiap user punya 1-2 alamat
         for _ in range(random.randint(1, 2)):
             addresses.append((user_id, fake.state(), fake.city(), fake.postcode(), fake.street_address()))
 
-    # Bulk insert
     extras.execute_values(cursor, "INSERT INTO users (email, password_hash, phone_number, created_at, updated_at) VALUES %s", users, page_size=5000)
     extras.execute_values(cursor, "INSERT INTO user_addresses (user_id, province, city, postal_code, full_address) VALUES %s", addresses, page_size=5000)
 
 def generate_transactions(cursor):
-    print(f"Insert {NUM_ORDERS} Orders, Items, Payments, & Shipping (Bisa memakan waktu beberapa detik/menit)...")
-    
-    # Ambil referensi ID untuk relasi
     cursor.execute("SELECT user_id FROM users")
     user_ids = [row[0] for row in cursor.fetchall()]
     
@@ -205,7 +183,6 @@ def generate_transactions(cursor):
                 'Delivered' if status == 'Completed' else 'Packed'
             ))
 
-    # Bulk Insert menggunakan page_size agar RAM tidak membeludak
     extras.execute_values(cursor, "INSERT INTO orders (order_id, user_id, address_id, order_date, total_amount, order_status) VALUES %s", orders, page_size=5000)
     extras.execute_values(cursor, "INSERT INTO order_items (order_id, product_id, quantity, unit_price_at_purchase) VALUES %s", order_items, page_size=5000)
     extras.execute_values(cursor, "INSERT INTO payments (order_id, payment_method, payment_status, payment_date) VALUES %s", payments, page_size=5000)
@@ -224,6 +201,6 @@ if __name__ == "__main__":
         
         cursor.close()
         conn.close()
-        print("🎉 SUCCESS! Semua data awal berhasil dimuat ke PostgreSQL.")
+        print("SUCCESS")
     except Exception as e:
-        print(f"❌ Error: {e}")
+        print(e)
