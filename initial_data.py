@@ -10,7 +10,7 @@ DB_CONFIG = {
     'dbname': 'source_db',
     'user': 'admin',
     'password': 'password123',
-    'host': 'localhost',
+    'host': '10.8.0.1',
     'port': '5432'
 }
 
