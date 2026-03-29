@@ -154,30 +154,43 @@ def generate_transactions(cursor):
     couriers = ['JNE', 'SiCepat', 'GoSend', 'J&T']
     
     for i in range(NUM_ORDERS):
-        # FIX DUPLIKAT: Menyematkan index (i) ke dalam UUID
         order_id = f"ORD-{i}-{fake.uuid4()[:6].upper()}"
         uid = random.choice(user_ids)
-        aid = random.choice(address_map[uid])
+        
+        # INJEKSI DATA KOTOR ORDERS 1: 2% Bug aplikasi, address_id gagal terkirim (NULL)
+        aid = random.choice(address_map[uid]) if random.random() > 0.02 else None
+        
         odt = random_date(START_DATE, END_DATE)
         status = random.choice(statuses)
 
         total_amount = 0
+        has_null_price = False # Penanda apakah ada item yang harganya error
+        
         for _ in range(random.randint(1, 3)):
             prod = random.choice(products)
             qty = random.randint(1, 2)
             
-            # INJEKSI DATA KOTOR: 1% Bug Sistem (Harga tidak tersimpan / NULL)
+            # Bug Sistem (Harga tidak tersimpan / NULL)
             unit_price = prod[1] if random.random() > 0.01 else None
             
             if unit_price is not None:
                 total_amount += (unit_price * qty)
+            else:
+                has_null_price = True # Tandai kalau ada harga yang error
                 
             order_items.append((order_id, prod[0], qty, unit_price))
         
         shipping_cost = random.randint(15, 100) * 1000
-        total_amount += shipping_cost
+        
+        # INJEKSI DATA KOTOR ORDERS 2: Jika ada harga item yg NULL, total_amount kasir jadi ikutan NULL
+        # (Juga tambahkan random 1% chance total_amount gagal terhitung)
+        if has_null_price or random.random() < 0.01:
+            final_total_amount = None
+        else:
+            final_total_amount = total_amount + shipping_cost
 
-        orders.append((order_id, uid, aid, odt, total_amount, status))
+        # Masukkan ke tabel orders dengan final_total_amount dan aid yang mungkin NULL
+        orders.append((order_id, uid, aid, odt, final_total_amount, status))
         
         if status != 'Cancelled':
             payments.append((
@@ -187,12 +200,11 @@ def generate_transactions(cursor):
                 odt + timedelta(minutes=random.randint(1, 60))
             ))
             
-            # INJEKSI DATA KOTOR: Logika Resi Realistis
             ship_status = 'Delivered' if status == 'Completed' else 'Packed'
             
             if ship_status == 'Packed':
-                tracking = None # Resi belum ada
-                courier = random.choice(couriers) if random.random() > 0.2 else None # Kadang kurir belum dipilih
+                tracking = None
+                courier = random.choice(couriers) if random.random() > 0.2 else None
             else:
                 tracking = fake.ean(length=13)
                 courier = random.choice(couriers)
@@ -209,7 +221,6 @@ def generate_transactions(cursor):
     extras.execute_values(cursor, "INSERT INTO order_items (order_id, product_id, quantity, unit_price_at_purchase) VALUES %s", order_items, page_size=5000)
     extras.execute_values(cursor, "INSERT INTO payments (order_id, payment_method, payment_status, payment_date) VALUES %s", payments, page_size=5000)
     extras.execute_values(cursor, "INSERT INTO shipping (order_id, courier_name, tracking_number, shipping_cost, shipping_status) VALUES %s", shipping, page_size=5000)
-
 if __name__ == "__main__":
     try:
         conn = psycopg2.connect(**DB_CONFIG)
