@@ -7,11 +7,11 @@ from datetime import datetime, timedelta
 fake = Faker('id_ID')
 
 DB_CONFIG = {
-    'dbname': 'source_db',
-    'user': 'admin',
-    'password': 'password123',
+    'dbname': 'oltp',
+    'user': 'oltp',
+    'password': 'oltppass',
     'host': '10.8.0.1',
-    'port': '5432'
+    'port': '5433'
 }
 
 NUM_USERS = 10_000
