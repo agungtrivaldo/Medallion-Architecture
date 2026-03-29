@@ -63,13 +63,14 @@ services:
       # - ./trino-jars:/usr/lib/trino/plugin/iceberg
 
   airflow:
-    image: apache/airflow:2.9.1
+    image: apache/airflow:2.10
     container_name: airflow
     environment:
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__CORE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres:5432/airflow
       AIRFLOW__CORE__FERNET_KEY: 'IDuTBGUhBX87tgM9ez-3bQXk8ciMOJPnRhgSf5c_HIs='
       AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+      _PIP_ADDITIONAL_REQUIREMENTS: minio apache-airflow-providers-trino==5.7.0
     depends_on:
       - postgres
     ports:
@@ -94,7 +95,7 @@ services:
       AIRFLOW__CORE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres:5432/airflow
       AIRFLOW__CORE__FERNET_KEY: IDuTBGUhBX87tgM9ez-3bQXk8ciMOJPnRhgSf5c_HIs=
       AIRFLOW__CORE__LOAD_EXAMPLES: "false"
-      _PIP_ADDITIONAL_REQUIREMENTS: minio apache-airflow-providers-docker==4.0.0
+      _PIP_ADDITIONAL_REQUIREMENTS: minio apache-airflow-providers-docker==4.0.0 apache-airflow-providers-trino==5.7.0
     volumes:
       - ./dags:/opt/airflow/dags
       - ./airflow_logs:/opt/airflow/logs
