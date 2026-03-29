@@ -149,7 +149,7 @@ def generate_transactions(cursor):
     couriers = ['JNE', 'SiCepat', 'GoSend', 'J&T']
     
     for i in range(NUM_ORDERS):
-        order_id = f"ORD-{fake.uuid4()[:8].upper()}"
+        order_id = f"ORD-{i}-{fake.uuid4()[:6].upper()}"
         uid = random.choice(user_ids)
         aid = random.choice(address_map[uid])
         odt = random_date(START_DATE, END_DATE)
