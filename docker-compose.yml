@@ -24,6 +24,16 @@ services:
     volumes:
       - ./init:/docker-entrypoint-initdb.d
 
+  postgres_oltp:
+    image: postgres:13
+    container_name: postgres_oltp
+    environment:
+      POSTGRES_USER: oltp
+      POSTGRES_PASSWORD: oltppass
+      POSTGRES_DB: oltp
+    ports:
+      - "10.8.0.1:5433:5432"
+
   hive-metastore:
     image: apache/hive:4.0.0
     container_name: hive-metastore
