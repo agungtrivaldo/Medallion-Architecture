@@ -124,10 +124,15 @@ def generate_users(cursor):
     
     for user_id in range(1, NUM_USERS + 1):
         dt = random_date(START_DATE, END_DATE)
-        users.append((fake.email(), fake.password(), fake.phone_number(), dt, dt))
+        
+        # INJEKSI DATA KOTOR: 15% user malas isi nomor HP
+        phone = fake.phone_number() if random.random() > 0.15 else None
+        users.append((fake.email(), fake.password(), phone, dt, dt))
         
         for _ in range(random.randint(1, 2)):
-            addresses.append((user_id, fake.state(), fake.city(), fake.postcode(), fake.street_address()))
+            # INJEKSI DATA KOTOR: 10% user tidak tahu kode pos rumahnya
+            postal = fake.postcode() if random.random() > 0.10 else None
+            addresses.append((user_id, fake.state(), fake.city(), postal, fake.street_address()))
 
     extras.execute_values(cursor, "INSERT INTO users (email, password_hash, phone_number, created_at, updated_at) VALUES %s", users, page_size=5000)
     extras.execute_values(cursor, "INSERT INTO user_addresses (user_id, province, city, postal_code, full_address) VALUES %s", addresses, page_size=5000)
@@ -149,6 +154,7 @@ def generate_transactions(cursor):
     couriers = ['JNE', 'SiCepat', 'GoSend', 'J&T']
     
     for i in range(NUM_ORDERS):
+        # FIX DUPLIKAT: Menyematkan index (i) ke dalam UUID
         order_id = f"ORD-{i}-{fake.uuid4()[:6].upper()}"
         uid = random.choice(user_ids)
         aid = random.choice(address_map[uid])
@@ -159,8 +165,13 @@ def generate_transactions(cursor):
         for _ in range(random.randint(1, 3)):
             prod = random.choice(products)
             qty = random.randint(1, 2)
-            unit_price = prod[1]
-            total_amount += (unit_price * qty)
+            
+            # INJEKSI DATA KOTOR: 1% Bug Sistem (Harga tidak tersimpan / NULL)
+            unit_price = prod[1] if random.random() > 0.01 else None
+            
+            if unit_price is not None:
+                total_amount += (unit_price * qty)
+                
             order_items.append((order_id, prod[0], qty, unit_price))
         
         shipping_cost = random.randint(15, 100) * 1000
@@ -175,12 +186,23 @@ def generate_transactions(cursor):
                 'Success', 
                 odt + timedelta(minutes=random.randint(1, 60))
             ))
+            
+            # INJEKSI DATA KOTOR: Logika Resi Realistis
+            ship_status = 'Delivered' if status == 'Completed' else 'Packed'
+            
+            if ship_status == 'Packed':
+                tracking = None # Resi belum ada
+                courier = random.choice(couriers) if random.random() > 0.2 else None # Kadang kurir belum dipilih
+            else:
+                tracking = fake.ean(length=13)
+                courier = random.choice(couriers)
+
             shipping.append((
                 order_id, 
-                random.choice(couriers), 
-                fake.ean(length=13), 
+                courier, 
+                tracking, 
                 shipping_cost, 
-                'Delivered' if status == 'Completed' else 'Packed'
+                ship_status
             ))
 
     extras.execute_values(cursor, "INSERT INTO orders (order_id, user_id, address_id, order_date, total_amount, order_status) VALUES %s", orders, page_size=5000)
@@ -194,13 +216,17 @@ if __name__ == "__main__":
         conn.autocommit = True
         cursor = conn.cursor()
         
+        print("Membangun Tabel...")
         create_tables(cursor)
+        print("Insert Data Master...")
         generate_master_data(cursor)
+        print("Insert Data Users...")
         generate_users(cursor)
+        print("Insert Data Transaksi (Harap tunggu)...")
         generate_transactions(cursor)
         
         cursor.close()
         conn.close()
-        print("SUCCESS")
+        print("SUCCESS! Pabrik Data telah selesai beroperasi.")
     except Exception as e:
-        print(e)
+        print(f"ERROR: {e}")
