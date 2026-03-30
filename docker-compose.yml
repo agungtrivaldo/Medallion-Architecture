@@ -63,7 +63,7 @@ services:
       # - ./trino-jars:/usr/lib/trino/plugin/iceberg
 
   airflow:
-    image: apache/airflow:2.9.3
+    image: apache/airflow:2.9.1
     container_name: airflow
     environment:
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
