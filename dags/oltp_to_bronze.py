@@ -48,7 +48,7 @@ def oltp_to_bronze():
                 task_id = f"incremental_load_{table}",
                 conn_id = "trino_conn",
                 sql = f"""
-                    MERGE INTO iceberg.bronze.orders bromze
+                    MERGE INTO iceberg.bronze.orders bronze
                     USING (
                         {config['query']} WHERE {config['watermark']} >= '{{{{ data_interval_start }}}}'
                     ) oltp
