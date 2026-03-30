@@ -14,12 +14,26 @@ DB_CONFIG = {
     'port': '5433'
 }
 
-NUM_USERS = 10_000
-NUM_ORDERS = 50_000
-START_DATE = datetime(2025, 1, 1)
-END_DATE = datetime(2026, 3, 27)
+# --- [UPDATE 1: SAKLAR MODE] ---
+# Ubah ke "INIT" untuk pertama kali jalan. 
+# Ubah ke "INCREMENTAL" untuk simulasi jalan harian.
+RUN_MODE = "INIT" 
+
+# Jika mode INCREMENTAL, kita cuma bikin sedikit data agar server tidak berat
+NUM_USERS = 10_000 if RUN_MODE == "INIT" else 50 
+NUM_ORDERS = 50_000 if RUN_MODE == "INIT" else 200
+
+# Waktu disesuaikan dengan mode
+if RUN_MODE == "INIT":
+    START_DATE = datetime(2025, 1, 1)
+    END_DATE = datetime(2026, 3, 27)
+else:
+    # Mode Incremental mengambil waktu HARI INI
+    START_DATE = datetime.now() - timedelta(days=1)
+    END_DATE = datetime.now()
 
 def create_tables(cursor):
+    # [UPDATE 2: Tambah updated_at di tabel orders]
     cursor.execute("""
         DROP TABLE IF EXISTS shipping, payments, order_items, orders, products, categories, brands, user_addresses, users CASCADE;
 
@@ -63,7 +77,8 @@ def create_tables(cursor):
             address_id INT REFERENCES user_addresses(address_id), 
             order_date TIMESTAMP, 
             total_amount DECIMAL, 
-            order_status VARCHAR(50)
+            order_status VARCHAR(50),
+            updated_at TIMESTAMP  -- <--- INI WAJIB UNTUK INCREMENTAL AIRFLOW
         );
         CREATE TABLE order_items (
             item_id SERIAL PRIMARY KEY, 
@@ -93,6 +108,7 @@ def random_date(start, end):
     return start + timedelta(seconds=random.randint(0, int((end - start).total_seconds())))
 
 def generate_master_data(cursor):
+    # Logika sama seperti sebelumnya... (Hanya berjalan saat INIT)
     brands = [
         ('Asus', 'Taiwan'), ('MSI', 'Taiwan'), ('Gigabyte', 'Taiwan'), 
         ('Samsung', 'South Korea'), ('Apple', 'USA'), ('Poco', 'China'), 
@@ -122,17 +138,20 @@ def generate_users(cursor):
     users = []
     addresses = []
     
-    for user_id in range(1, NUM_USERS + 1):
+    # [UPDATE 3: Ambil ID terakhir agar tidak bentrok saat incremental]
+    cursor.execute("SELECT COALESCE(MAX(user_id), 0) FROM users")
+    last_user_id = cursor.fetchone()[0]
+    
+    for _ in range(NUM_USERS):
+        last_user_id += 1
         dt = random_date(START_DATE, END_DATE)
         
-        # INJEKSI DATA KOTOR: 15% user malas isi nomor HP
         phone = fake.phone_number() if random.random() > 0.15 else None
         users.append((fake.email(), fake.password(), phone, dt, dt))
         
         for _ in range(random.randint(1, 2)):
-            # INJEKSI DATA KOTOR: 10% user tidak tahu kode pos rumahnya
             postal = fake.postcode() if random.random() > 0.10 else None
-            addresses.append((user_id, fake.state(), fake.city(), postal, fake.street_address()))
+            addresses.append((last_user_id, fake.state(), fake.city(), postal, fake.street_address()))
 
     extras.execute_values(cursor, "INSERT INTO users (email, password_hash, phone_number, created_at, updated_at) VALUES %s", users, page_size=5000)
     extras.execute_values(cursor, "INSERT INTO user_addresses (user_id, province, city, postal_code, full_address) VALUES %s", addresses, page_size=5000)
@@ -153,44 +172,47 @@ def generate_transactions(cursor):
     statuses = ['Completed', 'Completed', 'Completed', 'Completed', 'Pending', 'Cancelled']
     couriers = ['JNE', 'SiCepat', 'GoSend', 'J&T']
     
+    # Bikin prefix order_id beda buat incremental biar gampang dilacak
+    order_prefix = "INIT" if RUN_MODE == "INIT" else "INCR"
+    
     for i in range(NUM_ORDERS):
-        order_id = f"ORD-{i}-{fake.uuid4()[:6].upper()}"
+        order_id = f"ORD-{order_prefix}-{i}-{fake.uuid4()[:6].upper()}"
         uid = random.choice(user_ids)
         
-        # INJEKSI DATA KOTOR ORDERS 1: 2% Bug aplikasi, address_id gagal terkirim (NULL)
+        # Cegah error jika user belum punya alamat
+        if uid not in address_map: continue 
+        
         aid = random.choice(address_map[uid]) if random.random() > 0.02 else None
         
         odt = random_date(START_DATE, END_DATE)
         status = random.choice(statuses)
 
         total_amount = 0
-        has_null_price = False # Penanda apakah ada item yang harganya error
+        has_null_price = False
         
         for _ in range(random.randint(1, 3)):
             prod = random.choice(products)
             qty = random.randint(1, 2)
-            
-            # Bug Sistem (Harga tidak tersimpan / NULL)
             unit_price = prod[1] if random.random() > 0.01 else None
             
             if unit_price is not None:
                 total_amount += (unit_price * qty)
             else:
-                has_null_price = True # Tandai kalau ada harga yang error
+                has_null_price = True
                 
             order_items.append((order_id, prod[0], qty, unit_price))
         
         shipping_cost = random.randint(15, 100) * 1000
         
-        # INJEKSI DATA KOTOR ORDERS 2: Jika ada harga item yg NULL, total_amount kasir jadi ikutan NULL
-        # (Juga tambahkan random 1% chance total_amount gagal terhitung)
         if has_null_price or random.random() < 0.01:
             final_total_amount = None
         else:
             final_total_amount = total_amount + shipping_cost
 
-        # Masukkan ke tabel orders dengan final_total_amount dan aid yang mungkin NULL
-        orders.append((order_id, uid, aid, odt, final_total_amount, status))
+        # [UPDATE 4: Masukkan `updated_at` ke tabel orders]
+        # Untuk simulasi, anggap order terakhir diupdate beberapa jam setelah dibuat
+        updated_at = odt + timedelta(hours=random.randint(1, 24)) 
+        orders.append((order_id, uid, aid, odt, final_total_amount, status, updated_at))
         
         if status != 'Cancelled':
             payments.append((
@@ -217,27 +239,56 @@ def generate_transactions(cursor):
                 ship_status
             ))
 
-    extras.execute_values(cursor, "INSERT INTO orders (order_id, user_id, address_id, order_date, total_amount, order_status) VALUES %s", orders, page_size=5000)
+    # [UPDATE 5: Sesuaikan struktur INSERT dengan kolom baru]
+    extras.execute_values(cursor, "INSERT INTO orders (order_id, user_id, address_id, order_date, total_amount, order_status, updated_at) VALUES %s", orders, page_size=5000)
     extras.execute_values(cursor, "INSERT INTO order_items (order_id, product_id, quantity, unit_price_at_purchase) VALUES %s", order_items, page_size=5000)
     extras.execute_values(cursor, "INSERT INTO payments (order_id, payment_method, payment_status, payment_date) VALUES %s", payments, page_size=5000)
     extras.execute_values(cursor, "INSERT INTO shipping (order_id, courier_name, tracking_number, shipping_cost, shipping_status) VALUES %s", shipping, page_size=5000)
+
+def update_existing_orders(cursor):
+    """
+    [FITUR BARU]
+    Mensimulasikan perubahan data lama (contoh: status Pending berubah jadi Completed).
+    Ini gunanya agar Airflow MERGE kita melakukan aksi UPDATE, bukan cuma INSERT.
+    """
+    print("Mensimulasikan perubahan status pada order lama...")
+    cursor.execute("""
+        UPDATE orders 
+        SET order_status = 'Completed', updated_at = NOW() 
+        WHERE order_status = 'Pending' 
+        AND order_id IN (
+            SELECT order_id FROM orders WHERE order_status = 'Pending' LIMIT 100
+        );
+    """)
+    print(f"Berhasil mengupdate {cursor.rowcount} order yang sebelumnya Pending.")
+
 if __name__ == "__main__":
     try:
         conn = psycopg2.connect(**DB_CONFIG)
         conn.autocommit = True
         cursor = conn.cursor()
         
-        print("Membangun Tabel...")
-        create_tables(cursor)
-        print("Insert Data Master...")
-        generate_master_data(cursor)
-        print("Insert Data Users...")
-        generate_users(cursor)
-        print("Insert Data Transaksi (Harap tunggu)...")
-        generate_transactions(cursor)
+        print(f"=== MENJALANKAN PABRIK DATA DALAM MODE: {RUN_MODE} ===")
         
+        if RUN_MODE == "INIT":
+            print("Membangun Tabel Baru...")
+            create_tables(cursor)
+            print("Insert Data Master...")
+            generate_master_data(cursor)
+            print("Insert Data Users Awal...")
+            generate_users(cursor)
+            print("Insert Data Transaksi Awal (Harap tunggu)...")
+            generate_transactions(cursor)
+        
+        elif RUN_MODE == "INCREMENTAL":
+            print("Memasukkan Data Users Baru...")
+            generate_users(cursor)
+            print("Memasukkan Transaksi Hari Ini...")
+            generate_transactions(cursor)
+            update_existing_orders(cursor) # <-- Mengubah order kemarin
+            
         cursor.close()
         conn.close()
-        print("SUCCESS! Pabrik Data telah selesai beroperasi.")
+        print("SUCCESS! Proses selesai.")
     except Exception as e:
         print(f"ERROR: {e}")
