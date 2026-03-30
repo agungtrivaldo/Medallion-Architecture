@@ -34,7 +34,7 @@ TABLE = {
 )
 def oltp_to_bronze():
     for table, config in TABLE.items():
-        if config["full"]:
+        if config["type"] == "full":
             ingest_table = SQLExecuteQueryOperator(
                 task_id = f"full_load_{table}",
                 conn_id = "trino_conn",
