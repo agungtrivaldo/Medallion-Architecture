@@ -35,13 +35,14 @@ TABLE = {
     catchup=False,
 )
 def oltp_to_bronze():
+    @task
     def incremental(config,table_name,**context):
         trino_hook =  TrinoHook(trino_conn_id="trino_conn")
         query = f"SELECT column_name FROM postgres.information_schema.columns WHERE table_schema = 'public' AND table_name = '{table_name}'"
         records = trino_hook.get_records(query)
-        cols = [[row[0]] for row in records]
+        cols = [row[0] for row in records]
         primary_key =  config["primary_key"]
-        run_date = context['data_interval_start'].isformat()
+        run_date = context['data_interval_start'].isoformat()
         update_set = ", ".join([f"{cols} = oltp.{cols}" for cols in cols if cols != primary_key])
         insert_cols = ", ".join(cols)
         insert_values = ", ".join([f"oltp.{cols}" for cols in cols])
@@ -52,9 +53,9 @@ def oltp_to_bronze():
                     ) oltp
                     ON {primary_key} = oltp.{primary_key}
                     WHEN MATCHED THEN UPDATE SET {update_set}
-                    WHEN NOT MATCHED THEN INSERT {insert_cols} VALUES {insert_values}
+                    WHEN NOT MATCHED THEN INSERT ({insert_cols}) VALUES ({insert_values})
                 """
-
+        trino_hook.run(sql)
 
     for table, config in TABLE.items():
         if config["type"] == "full":
