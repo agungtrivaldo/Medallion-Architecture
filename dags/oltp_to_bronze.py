@@ -36,7 +36,7 @@ TABLE = {
 )
 def oltp_to_bronze():
     def incremental(config,table_name,**context):
-        trino_hook =  Trinohook(trino_conn_id="trino_conn")
+        trino_hook =  TrinoHook(trino_conn_id="trino_conn")
         query = f"SELECT column_name FROM postgres.information_schema.columns WHERE table_schema = 'public' AND table_name = '{table_name}'"
         records = trino_hook.get_records(query)
         cols = [[row[0]] for row in records]
