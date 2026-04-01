@@ -31,12 +31,12 @@ TABLE = {
 
 
 @dag(
-    dag_id="oltp_to_bronze",
+    dag_id="etl_pipeline",
     schedule_interval="@daily",
     start_date=datetime(2025, 1, 1),
     catchup=False,
 )
-def oltp_to_bronze():
+def etl_pipeline():
     @task.branch
     def table_checking(table):
         trino_hook = TrinoHook(trino_conn_id="trino_conn")
@@ -72,12 +72,23 @@ def oltp_to_bronze():
                     WHEN NOT MATCHED THEN INSERT ({insert_cols}) VALUES ({insert_values})
                 """
         trino_hook.run(sql)
+    @task.bash(trigger_rule="none_failed")
+    def dbt_ingest_silver():
+        cmd = """
+            source /home/agung/medallion_env/bin/activate && \
+            cd /home/agung/medalion/Medallion-Architecture/dbt_config && \
+            dbt run --select fact_orders
+        """
 
+        return cmd
+    bronze = []
     for table, config in TABLE.items():
         checker = table_checking.override(task_id=f"table_checking_{table}")(table)
         creator = create_table.override(task_id=f"create_table_{table}")(config,table)
         upsert = upsert_table.override(task_id=f"upsert_table_{table}")(config,table)
 
         checker >> [creator,upsert]
-
-oltp_to_bronze()
+        bronze.extend([creator,upsert])
+    silver_ingest = dbt_ingest_silver()
+    bronze >> silver_ingest
+etl_pipeline()
