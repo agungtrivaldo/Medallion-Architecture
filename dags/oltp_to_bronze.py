@@ -5,7 +5,7 @@ from airflow.providers.trino.hooks.trino import TrinoHook
 
 
 TABLE = {
-"users": {
+    "users": {
         "query": "SELECT * FROM postgres.public.users",
         "watermark": "updated_at",
         "primary_key": "user_id"
@@ -13,8 +13,15 @@ TABLE = {
     "orders": {
         "query": """
             SELECT 
-                user_id, order_id, CAST(total_amount AS DOUBLE) as total_amount,
-                address_id, order_date, order_status, updated_at
+                user_id, 
+                order_id, 
+                CAST(total_amount AS DOUBLE) as total_amount,
+                address_id, 
+                order_date, 
+                order_status, 
+                updated_at,
+                current_timestamp as _ingested_at,
+                "postgres_oltp" as _source_system
             FROM postgres.public.orders
         """,
         "watermark": "updated_at",
@@ -58,7 +65,7 @@ def oltp_to_bronze():
         sql = f"""
                     MERGE INTO iceberg.bronze.{table} bronze
                     USING (
-                        {config['query']} WHERE {config['watermark']} >= '{run_date}'
+                        {config['query']} WHERE {config['watermark']} >= CAST('{run_date}' AS TIMESTAMP)
                     ) oltp
                     ON {primary_key} = oltp.{primary_key}
                     WHEN MATCHED THEN UPDATE SET {update_set}
