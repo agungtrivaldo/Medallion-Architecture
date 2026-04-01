@@ -61,7 +61,7 @@ def oltp_to_bronze():
         update_set = ", ".join([f"{col} = oltp.{col}" for col in cols if col != primary_key])
         insert_cols = ", ".join(cols)
         insert_values = ", ".join([f"oltp.{col}" for col in cols])
-        run_date = context['data_interval_start'].isoformat()
+        run_date = context['data_interval_start'].strftime('%Y-%m-%d %H:%M:%S')
         sql = f"""
                     MERGE INTO iceberg.bronze.{table} bronze
                     USING (
