@@ -21,7 +21,7 @@ TABLE = {
                 order_status, 
                 updated_at,
                 current_timestamp as _ingested_at,
-                "postgres_oltp" as _source_system
+                'postgres_oltp' as _source_system
             FROM postgres.public.orders
         """,
         "watermark": "updated_at",
@@ -67,7 +67,7 @@ def oltp_to_bronze():
                     USING (
                         {config['query']} WHERE {config['watermark']} >= CAST('{run_date}' AS TIMESTAMP)
                     ) oltp
-                    ON {primary_key} = oltp.{primary_key}
+                    ON bronze.{primary_key} = oltp.{primary_key}
                     WHEN MATCHED THEN UPDATE SET {update_set}
                     WHEN NOT MATCHED THEN INSERT ({insert_cols}) VALUES ({insert_values})
                 """
