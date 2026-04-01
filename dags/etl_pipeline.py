@@ -79,7 +79,7 @@ def etl_pipeline():
     def dbt_ingest_silver():
         cmd = """
             set -e
-            source /home/agung/medallion_env/bin/activate
+            source /home/agung/medalion/Medallion-Architecture/medallion_env
             cd /home/agung/medalion/Medallion-Architecture/dbt_config
             dbt run --select fact_orders
         """
