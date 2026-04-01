@@ -46,11 +46,13 @@ def etl_pipeline():
             return f"create_table_{table}"
         else:
             return f"upsert_table_{table}"
+        
     @task
     def create_table(config,table):
         trino_hook = TrinoHook(trino_conn_id="trino_conn")
         sql = f"CREATE TABLE iceberg.bronze.{table} AS {config['query']}"
         trino_hook.run(sql)
+
     @task
     def upsert_table(config,table,**context):
         trino_hook = TrinoHook(trino_conn_id="trino_conn")
@@ -72,16 +74,19 @@ def etl_pipeline():
                     WHEN NOT MATCHED THEN INSERT ({insert_cols}) VALUES ({insert_values})
                 """
         trino_hook.run(sql)
+
     @task.bash(trigger_rule="none_failed")
     def dbt_ingest_silver():
         cmd = """
-            source /home/agung/medallion_env/bin/activate && \
-            cd /home/agung/medalion/Medallion-Architecture/dbt_config && \
+            set -e
+            source /home/agung/medallion_env/bin/activate
+            cd /home/agung/medalion/Medallion-Architecture/dbt_config
             dbt run --select fact_orders
         """
-
         return cmd
+    
     bronze = []
+
     for table, config in TABLE.items():
         checker = table_checking.override(task_id=f"table_checking_{table}")(table)
         creator = create_table.override(task_id=f"create_table_{table}")(config,table)
@@ -89,6 +94,9 @@ def etl_pipeline():
 
         checker >> [creator,upsert]
         bronze.extend([creator,upsert])
+        
     silver_ingest = dbt_ingest_silver()
+
     bronze >> silver_ingest
+
 etl_pipeline()
