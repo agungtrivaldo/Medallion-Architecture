@@ -70,7 +70,7 @@ services:
       AIRFLOW__CORE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres:5432/airflow
       AIRFLOW__CORE__FERNET_KEY: 'IDuTBGUhBX87tgM9ez-3bQXk8ciMOJPnRhgSf5c_HIs='
       AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
-      _PIP_ADDITIONAL_REQUIREMENTS: minio apache-airflow-providers-trino==5.7.0
+      _PIP_ADDITIONAL_REQUIREMENTS: minio apache-airflow-providers-trino==5.7.0 dbt-core dbt-trino
     depends_on:
       - postgres
     ports:
@@ -80,6 +80,7 @@ services:
       - ./airflow_logs:/opt/airflow/logs
       - ./airflow_plugins:/opt/airflow/plugins
       - /var/run/docker.sock:/var/run/docker.sock
+      - /home/agung/medalion/Medallion-Architecture/dbt_config:/opt/airflow/dbt_config
     command: >
       bash -c "airflow db migrate &&
               airflow users create --username admin --password admin --firstname Admin --lastname User --role Admin --email admin@example.com &&
@@ -95,18 +96,11 @@ services:
       AIRFLOW__CORE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres:5432/airflow
       AIRFLOW__CORE__FERNET_KEY: IDuTBGUhBX87tgM9ez-3bQXk8ciMOJPnRhgSf5c_HIs=
       AIRFLOW__CORE__LOAD_EXAMPLES: "false"
-      _PIP_ADDITIONAL_REQUIREMENTS: minio apache-airflow-providers-docker==4.0.0 apache-airflow-providers-trino==5.7.0
+      _PIP_ADDITIONAL_REQUIREMENTS: minio apache-airflow-providers-trino==5.7.0 dbt-core dbt-trino
     volumes:
       - ./dags:/opt/airflow/dags
       - ./airflow_logs:/opt/airflow/logs
       - ./airflow_plugins:/opt/airflow/plugins
       - /var/run/docker.sock:/var/run/docker.sock
+      - /home/agung/medalion/Medallion-Architecture/dbt_config:/opt/airflow/dbt_config
     command: airflow scheduler
-
-  dbt:
-    image: ghcr.io/dbt-labs/dbt-postgres:1.7.0
-    container_name: dbt
-    depends_on:
-      - postgres
-    volumes:
-      - ./dbt:/usr/app
