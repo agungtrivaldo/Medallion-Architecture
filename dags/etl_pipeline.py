@@ -90,7 +90,7 @@ TABLE = {
 )
 def etl_pipeline():
     @task.branch
-    def table_checking(config,table):
+    def table_checking(table):
         trino_hook = TrinoHook(trino_conn_id="trino_conn")
         sql = f"SHOW TABLES FROM iceberg.bronze LIKE '{table}'"
         records = trino_hook.get_records(sql)
