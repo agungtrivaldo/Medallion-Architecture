@@ -80,7 +80,7 @@ def etl_pipeline():
         cmd = """
             set -e
             cd /opt/airflow/dbt_config
-            dbt run 
+            dbt snapshot 
         """
         return cmd
     

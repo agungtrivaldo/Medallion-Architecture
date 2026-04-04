@@ -1,8 +1,11 @@
+{% snapshot fact_orders %}
+
 {{
     config(
-        materialized = 'incremental',
+        target_schema = 'silver'
         unique_key = 'order_id',
-        incremental_strategy = 'merge'
+        strategy = 'timestamp'
+        update_at = 'updated_at'
     )
 }}
 
@@ -16,8 +19,7 @@ SELECT
     CAST(updated_at AS TIMESTAMP) as updated_at,
     CAST(_ingested_at AS TIMESTAMP) as _ingested_at,
     CAST(_source_system AS VARCHAR(100)) as _source_system
+
 FROM {{source ('bronze_layer','orders')}}
 
-{% if is_incremental() %}
-WHERE _ingested_at > (SELECT COALESCE(MAX(_ingested_at), CAST('1970-01-01 00:00:00' AS TIMESTAMP)) FROM {{this}})
-{% endif %}
+{% endsnapshot %}
