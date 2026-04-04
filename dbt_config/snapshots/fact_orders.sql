@@ -5,7 +5,7 @@
         target_schema = 'silver',
         unique_key = 'order_id',
         strategy = 'timestamp',
-        update_at = 'updated_at'
+        updated_at = 'updated_at'
     )
 }}
 
