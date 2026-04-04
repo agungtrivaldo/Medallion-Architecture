@@ -26,7 +26,59 @@ TABLE = {
         """,
         "watermark": "updated_at",
         "primary_key": "order_id"
-    }
+    },
+    "brands" : {
+        "query": "SELECT * FROM brands",
+        "watermark": "",
+        "primary_key": "brand_id"
+    },
+    "categories" : {
+        "query": "SELECT * FROM categories",
+        "watermark": "",
+        "primary_key": "category_id"
+    },
+    "order_items" : {
+        "query": """
+        SELECT order_items.item_id,order_items.order_id,order_items.product_id,order_items.quantity,CAST(order_items.unit_price_at_purchase as double),orders.updated_at 
+        FROM postgres.public.order_items 
+        LEFT JOIN postgres.public.orders ON orders.order_id = order_items.order_id
+
+    """,
+        "watermark": "updated_at",
+        "primary_key": "order_id"
+    },
+    "payments" : {
+        "query": """
+            SELECT payments.payment_id,payments.order_id,payments.payment_method,payments.payment_status,payments.payment_date,orders.updated_at 
+            FROM postgres.public.payments 
+            LEFT JOIN postgres.public.orders ON orders.order_id = payments.order_id
+            """,
+        "watermark": "updated_at",
+        "primary_key": "payment_id"
+    },
+    "products" : {
+        "query": "select product_id,category_id,brand_id,product_name,cast(base_price as double),weight_grams,updated_at from postgres.public.products",
+        "watermark": "",
+        "primary_key": ""
+    },
+    "shipping" : {
+        "query": """
+        select shipping.shipping_id,shipping.order_id,shipping.courier_name,shipping.tracking_number,cast(shipping.shipping_cost as double),shipping.shipping_status,orders.updated_at
+        from postgres.public.shipping
+        left join postgres.public.orders ON orders.order_id = shipping.order_id
+        """,
+        "watermark": "updated_at",
+        "primary_key": "shipping_id"
+    },
+    "user_addresses" : {
+        "query": """
+            select user_addresses.address_id,user_addresses.user_id,user_addresses.province,user_addresses.city,user_addresses.postal_code,user_addresses.full_address,users.created_At,users.updated_at 
+            from postgres.public.user_addresses
+            left join postgres.public.users on users.user_id = user_addresses.user_id
+            """,
+        "watermark": "updated_at",
+        "primary_key": "user_id"
+    },
 }
 
 
@@ -38,11 +90,11 @@ TABLE = {
 )
 def etl_pipeline():
     @task.branch
-    def table_checking(table):
+    def table_checking(config,table):
         trino_hook = TrinoHook(trino_conn_id="trino_conn")
         sql = f"SHOW TABLES FROM iceberg.bronze LIKE '{table}'"
         records = trino_hook.get_records(sql)
-        if not records:
+        if not records or config['watermark'] == "":
             return f"create_table_{table}"
         else:
             return f"upsert_table_{table}"
@@ -50,7 +102,7 @@ def etl_pipeline():
     @task
     def create_table(config,table):
         trino_hook = TrinoHook(trino_conn_id="trino_conn")
-        sql = f"CREATE TABLE iceberg.bronze.{table} AS {config['query']}"
+        sql = f"CREATE TABLE OR REPLACE TABLE iceberg.bronze.{table} AS {config['query']}"
         trino_hook.run(sql)
 
     @task
