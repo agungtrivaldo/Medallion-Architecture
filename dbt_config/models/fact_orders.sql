@@ -15,9 +15,9 @@ SELECT
     CAST(order_status AS VARCHAR(15)) as order_status, 
     CAST(updated_at AS TIMESTAMP) as updated_at,
     CAST(_ingested_at AS TIMESTAMP) as _ingested_at,
-    CAST(_source_system AS VARCHAR(10)) as _source_system
+    CAST(_source_system AS VARCHAR(100)) as _source_system
 FROM {{source ('bronze_layer','orders')}}
 
 {% if is_incremental() %}
-WHERE _ingested_at > (SELECT MAX(_ingested_at) FROM {{this}})
+WHERE _ingested_at > (SELECT COALESCE(MAX(_ingested_at), CAST('1970-01-01 00:00:00' AS TIMESTAMP)) FROM {{this}})
 {% endif %}
