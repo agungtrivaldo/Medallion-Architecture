@@ -70,7 +70,7 @@ services:
       AIRFLOW__CORE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres:5432/airflow
       AIRFLOW__CORE__FERNET_KEY: 'IDuTBGUhBX87tgM9ez-3bQXk8ciMOJPnRhgSf5c_HIs='
       AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
-      _PIP_ADDITIONAL_REQUIREMENTS: minio apache-airflow-providers-trino==5.7.0 dbt-core dbt-trino
+      _PIP_ADDITIONAL_REQUIREMENTS: minio apache-airflow-providers-trino==5.7.0
     depends_on:
       - postgres
     ports:
@@ -96,7 +96,7 @@ services:
       AIRFLOW__CORE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres:5432/airflow
       AIRFLOW__CORE__FERNET_KEY: IDuTBGUhBX87tgM9ez-3bQXk8ciMOJPnRhgSf5c_HIs=
       AIRFLOW__CORE__LOAD_EXAMPLES: "false"
-      _PIP_ADDITIONAL_REQUIREMENTS: minio apache-airflow-providers-trino==5.7.0 dbt-core dbt-trino
+      _PIP_ADDITIONAL_REQUIREMENTS: minio apache-airflow-providers-trino==5.7.0
     volumes:
       - ./dags:/opt/airflow/dags
       - ./airflow_logs:/opt/airflow/logs
