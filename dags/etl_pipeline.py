@@ -79,7 +79,7 @@ def etl_pipeline():
     def dbt_ingest_silver():
         cmd = """
             set -e
-            source /opt/airflow/dbt_config
+            cd /opt/airflow/dbt_config
             dbt run 
         """
         return cmd
