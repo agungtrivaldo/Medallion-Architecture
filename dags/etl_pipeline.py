@@ -166,7 +166,7 @@ def etl_pipeline():
         sql = f"SHOW TABLES FROM iceberg.bronze LIKE '{table}'"
         records = trino_hook.get_records(sql)
         watermark = TABLE[table]["watermark"]
-        if not records or config['watermark'] == "":
+        if not records or watermark == "":
             return f"create_table_{table}"
         else:
             return f"upsert_table_{table}"
