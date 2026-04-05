@@ -166,7 +166,7 @@ def etl_pipeline():
     @task
     def create_table(config,table):
         trino_hook = TrinoHook(trino_conn_id="trino_conn")
-        sql = f"CREATE TABLE OR REPLACE TABLE iceberg.bronze.{table} AS {config['query']}"
+        sql = f"CREATE OR REPLACE TABLE iceberg.bronze.{table} AS {config['query']}"
         trino_hook.run(sql)
 
     @task
