@@ -13,7 +13,7 @@ TABLE = {
                 password_hash,
                 phone_number,
                 created_at,
-                update_at,
+                updated_at,
                 current_timestamp AS _ingested_at,
                 "postgres_oltp" AS _source_system
             FROM postgres.public.users
@@ -120,7 +120,7 @@ TABLE = {
             shipping.order_id,
             shipping.courier_name,
             shipping.tracking_number,
-            cast(shipping.shipping_cost as double),
+            cast(shipping.shipping_cost as double) AS shipping_cost,
             shipping.shipping_status,
             orders.updated_at,
             current_timestamp AS _ingested_at,
@@ -165,6 +165,7 @@ def etl_pipeline():
         trino_hook = TrinoHook(trino_conn_id="trino_conn")
         sql = f"SHOW TABLES FROM iceberg.bronze LIKE '{table}'"
         records = trino_hook.get_records(sql)
+        watermark = TABLE[table]["watermark"]
         if not records or config['watermark'] == "":
             return f"create_table_{table}"
         else:
