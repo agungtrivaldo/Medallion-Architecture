@@ -46,7 +46,7 @@ TABLE = {
                 country_of_origin,
                 current_timestamp AS _ingested_at,
                 "postgres_oltp" AS _source_system
-            FROM brands
+            FROM postgres.public.brands
         """,
         "watermark": "",
         "primary_key": "brand_id"
@@ -56,7 +56,7 @@ TABLE = {
             SELECT 
                 category_id,
                 category_name 
-            FROM categories
+            FROM postgres.public.categories
         """,
         "watermark": "",
         "primary_key": "category_id"
@@ -67,14 +67,15 @@ TABLE = {
             order_items.order_id,
             order_items.product_id,
             order_items.quantity,
-            CAST(order_items.unit_price_at_purchase as double),
-            orders.updated_at 
+            CAST(order_items.unit_price_at_purchase as double) as unit_price_at_purchase,
+            orders.updated_at,
+            current_timestamp AS _ingested_at,
+            "postgres_oltp" AS _source_system
         FROM postgres.public.order_items 
         LEFT JOIN postgres.public.orders ON orders.order_id = order_items.order_id
-
     """,
         "watermark": "updated_at",
-        "primary_key": "order_id"
+        "primary_key": "item_id"
     },
     "payments" : {
         "query": """
@@ -84,7 +85,9 @@ TABLE = {
                 payments.payment_method,
                 payments.payment_status,
                 payments.payment_date,
-                orders.updated_at 
+                orders.updated_at,
+                current_timestamp AS _ingested_at,
+                "postgres_oltp" AS _source_system
             FROM postgres.public.payments 
             LEFT JOIN postgres.public.orders ON orders.order_id = payments.order_id
             """,
@@ -98,13 +101,15 @@ TABLE = {
                 category_id,
                 brand_id,
                 product_name,
-                CAST(base_price as double),
+                CAST(base_price as double) AS base_price,
                 weight_grams,
-                updated_at  
+                updated_at,
+                current_timestamp AS _ingested_at,
+                "postgres_oltp" AS _source_system 
             FROM postgres.public.products
         """,
         "watermark": "",
-        "primary_key": ""
+        "primary_key": "product_id"
     },
     "shipping" : {
         "query": """
