@@ -45,7 +45,7 @@ TABLE = {
                 brand_name,
                 country_of_origin,
                 current_timestamp AS _ingested_at,
-                "postgres_oltp" AS _source_system
+                'postgres_oltp' AS _source_system
             FROM postgres.public.brands
         """,
         "watermark": "",
@@ -55,7 +55,9 @@ TABLE = {
         "query": """
             SELECT 
                 category_id,
-                category_name 
+                category_name,
+                current_timestamp AS _ingested_at,
+                'postgres_oltp' AS _source_system 
             FROM postgres.public.categories
         """,
         "watermark": "",
@@ -70,7 +72,7 @@ TABLE = {
             CAST(order_items.unit_price_at_purchase as double) as unit_price_at_purchase,
             orders.updated_at,
             current_timestamp AS _ingested_at,
-            "postgres_oltp" AS _source_system
+            'postgres_oltp' AS _source_system
         FROM postgres.public.order_items 
         LEFT JOIN postgres.public.orders ON orders.order_id = order_items.order_id
     """,
@@ -87,7 +89,7 @@ TABLE = {
                 payments.payment_date,
                 orders.updated_at,
                 current_timestamp AS _ingested_at,
-                "postgres_oltp" AS _source_system
+                'postgres_oltp' AS _source_system
             FROM postgres.public.payments 
             LEFT JOIN postgres.public.orders ON orders.order_id = payments.order_id
             """,
@@ -105,7 +107,7 @@ TABLE = {
                 weight_grams,
                 updated_at,
                 current_timestamp AS _ingested_at,
-                "postgres_oltp" AS _source_system 
+                'postgres_oltp' AS _source_system 
             FROM postgres.public.products
         """,
         "watermark": "",
@@ -122,7 +124,7 @@ TABLE = {
             shipping.shipping_status,
             orders.updated_at,
             current_timestamp AS _ingested_at,
-            "postgres_oltp" AS _source_system
+            'postgres_oltp' AS _source_system
         FROM postgres.public.shipping
         LEFT JOIN postgres.public.orders ON orders.order_id = shipping.order_id
         """,
@@ -141,7 +143,7 @@ TABLE = {
                 users.created_at,
                 users.updated_at,
                 current_timestamp AS _ingested_at,
-                "postgres_oltp" AS _source_system 
+                'postgres_oltp' AS _source_system 
             FROM postgres.public.user_addresses
             LEFT JOIN postgres.public.users on users.user_id = user_addresses.user_id
             """,
