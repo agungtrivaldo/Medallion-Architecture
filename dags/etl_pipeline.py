@@ -6,7 +6,18 @@ from airflow.providers.trino.hooks.trino import TrinoHook
 
 TABLE = {
     "users": {
-        "query": "SELECT * FROM postgres.public.users",
+        "query": """
+            SELECT
+                user_id,
+                email,
+                password_hash,
+                phone_number,
+                created_at,
+                update_at,
+                current_timestamp AS _ingested_at,
+                "postgres_oltp" AS _source_system
+            FROM postgres.public.users
+            """,
         "watermark": "updated_at",
         "primary_key": "user_id"
     },
@@ -28,18 +39,36 @@ TABLE = {
         "primary_key": "order_id"
     },
     "brands" : {
-        "query": "SELECT * FROM brands",
+        "query": """
+            SELECT 
+                brand_id,
+                brand_name,
+                country_of_origin,
+                current_timestamp AS _ingested_at,
+                "postgres_oltp" AS _source_system
+            FROM brands
+        """,
         "watermark": "",
         "primary_key": "brand_id"
     },
     "categories" : {
-        "query": "SELECT * FROM categories",
+        "query": """
+            SELECT 
+                category_id,
+                category_name 
+            FROM categories
+        """,
         "watermark": "",
         "primary_key": "category_id"
     },
     "order_items" : {
         "query": """
-        SELECT order_items.item_id,order_items.order_id,order_items.product_id,order_items.quantity,CAST(order_items.unit_price_at_purchase as double),orders.updated_at 
+        SELECT order_items.item_id,
+            order_items.order_id,
+            order_items.product_id,
+            order_items.quantity,
+            CAST(order_items.unit_price_at_purchase as double),
+            orders.updated_at 
         FROM postgres.public.order_items 
         LEFT JOIN postgres.public.orders ON orders.order_id = order_items.order_id
 
@@ -49,7 +78,13 @@ TABLE = {
     },
     "payments" : {
         "query": """
-            SELECT payments.payment_id,payments.order_id,payments.payment_method,payments.payment_status,payments.payment_date,orders.updated_at 
+            SELECT 
+                payments.payment_id,
+                payments.order_id,
+                payments.payment_method,
+                payments.payment_status,
+                payments.payment_date,
+                orders.updated_at 
             FROM postgres.public.payments 
             LEFT JOIN postgres.public.orders ON orders.order_id = payments.order_id
             """,
@@ -57,24 +92,53 @@ TABLE = {
         "primary_key": "payment_id"
     },
     "products" : {
-        "query": "select product_id,category_id,brand_id,product_name,cast(base_price as double),weight_grams,updated_at from postgres.public.products",
+        "query": """
+            SELECT 
+                product_id,
+                category_id,
+                brand_id,
+                product_name,
+                CAST(base_price as double),
+                weight_grams,
+                updated_at  
+            FROM postgres.public.products
+        """,
         "watermark": "",
         "primary_key": ""
     },
     "shipping" : {
         "query": """
-        select shipping.shipping_id,shipping.order_id,shipping.courier_name,shipping.tracking_number,cast(shipping.shipping_cost as double),shipping.shipping_status,orders.updated_at
-        from postgres.public.shipping
-        left join postgres.public.orders ON orders.order_id = shipping.order_id
+        SELECT 
+            shipping.shipping_id,
+            shipping.order_id,
+            shipping.courier_name,
+            shipping.tracking_number,
+            cast(shipping.shipping_cost as double),
+            shipping.shipping_status,
+            orders.updated_at,
+            current_timestamp AS _ingested_at,
+            "postgres_oltp" AS _source_system
+        FROM postgres.public.shipping
+        LEFT JOIN postgres.public.orders ON orders.order_id = shipping.order_id
         """,
         "watermark": "updated_at",
         "primary_key": "shipping_id"
     },
     "user_addresses" : {
         "query": """
-            select user_addresses.address_id,user_addresses.user_id,user_addresses.province,user_addresses.city,user_addresses.postal_code,user_addresses.full_address,users.created_At,users.updated_at 
-            from postgres.public.user_addresses
-            left join postgres.public.users on users.user_id = user_addresses.user_id
+            SELECT 
+                user_addresses.address_id,
+                user_addresses.user_id,
+                user_addresses.province,
+                user_addresses.city,
+                user_addresses.postal_code,
+                user_addresses.full_address,
+                users.created_at,
+                users.updated_at,
+                current_timestamp AS _ingested_at,
+                "postgres_oltp" AS _source_system 
+            FROM postgres.public.user_addresses
+            LEFT JOIN postgres.public.users on users.user_id = user_addresses.user_id
             """,
         "watermark": "updated_at",
         "primary_key": "user_id"
