@@ -163,10 +163,14 @@ def etl_pipeline():
     @task.branch
     def table_checking(table):
         trino_hook = TrinoHook(trino_conn_id="trino_conn")
-        sql = f"SHOW TABLES FROM iceberg.bronze LIKE '{table}'"
-        records = trino_hook.get_records(sql)
+        table_query = f"SHOW TABLES FROM iceberg.bronze LIKE '{table}' "
+        row_count = f"SELECT count(*) from iceberg.bronze.{table}"
+        table_records = trino_hook.get_records(table_query)
+        if not table_records:
+            return f"create_table_{table}"
+        row_count_records = trino_hook.get_records(row_count)
         watermark = TABLE[table]["watermark"]
-        if not records or watermark == "":
+        if watermark == "" or row_count_records == 0:
             return f"create_table_{table}"
         else:
             return f"upsert_table_{table}"
