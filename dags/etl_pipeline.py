@@ -15,7 +15,7 @@ TABLE = {
                 created_at,
                 updated_at,
                 current_timestamp AS _ingested_at,
-                "postgres_oltp" AS _source_system
+                'postgres_oltp' AS _source_system
             FROM postgres.public.users
             """,
         "watermark": "updated_at",
