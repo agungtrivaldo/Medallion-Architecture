@@ -169,8 +169,9 @@ def etl_pipeline():
         if not table_records:
             return f"create_table_{table}"
         row_count_records = trino_hook.get_records(row_count)
+        final_row_count = row_count_records[0][0] if row_count_records else 0
         watermark = TABLE[table]["watermark"]
-        if watermark == "" or row_count_records == 0:
+        if watermark == "" or final_row_count == 0:
             return f"create_table_{table}"
         else:
             return f"upsert_table_{table}"
