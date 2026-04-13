@@ -1,4 +1,4 @@
-{% snapshot fact_orders %}
+{% snapshot fact_shipping %}
 
 {{
     config(
