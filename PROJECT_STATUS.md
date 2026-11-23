@@ -17,11 +17,11 @@ Last updated: 2026-11-23
 | 1. Core stack up | Passed 2026-11-22 from clean state (`down -v`, then `up -d`): all services running, `hive-metastore` started first time with 0 restarts. Fixes: `HADOOP_OPTIONAL_TOOLS: hadoop-aws`; Postgres `healthcheck` + `condition: service_healthy` for `hive-metastore`, `airflow`, `airflow-scheduler`. Full stack ready in ~165 s |
 | 2. Bootstrap | Passed 2026-11-22 from clean state: one-shot `bootstrap` service (`bootstrap/bootstrap.sh`) creates bucket `warehouse` and `iceberg.bronze` at `s3a://warehouse/`; rerun exits 0 (idempotent). `trino_conn` comes from `AIRFLOW_CONN_TRINO_CONN`. Needed a longer Trino healthcheck `start_period` (Trino took ~1 min to start with the full stack) |
 | 3. Seed source | Passed 2026-11-22: 9 tables populated (counts in the spec's findings log) |
-| 4. DAG run #1 | Passed 2026-11-23 (run `manual__2026-11-23T06:46:28`): 9 `table_checking_*` and 9 `create_table_*` (CTAS) tasks succeeded; `upsert_table_*` skipped as expected. `dbt_ingest_silver` failed with `dbt: command not found` (exit 127), out of scope (M0.2). No S3 errors in Hive Metastore or Trino logs; data files under `s3a://warehouse/`. Peak memory not measured |
+| 4. DAG run #1 | Passed 2026-11-23 (run `manual__2026-11-23T06:46:28`): 9 `table_checking_*` and 9 `create_table_*` (CTAS) tasks succeeded; `upsert_table_*` skipped as expected. `dbt_ingest_silver` failed with `dbt: command not found` (exit 127), out of scope (M0.2). No S3 errors in Hive Metastore or Trino logs; data files under `s3a://warehouse/`. Peak memory measured on a CTAS rerun (see Memory below) |
 | 5. Reconciliation #1 | Passed 2026-11-23 with `scripts/reconcile_bronze.py`, tables listed in `scripts/reconcile_bronze.yaml` (output below). Negative check also run: a wrong PK (`user_id` for `user_addresses`) and a missing table both FAIL with exit code 1 |
 | 6. MERGE + idempotency test | Under redesign (ticket 02): with the INIT seed, run #2 would `MERGE` zero rows |
 
-Memory (`docker stats`): idle, all 7 services, 2026-11-22: ~2.7 GiB of 9.6 GiB (Trino ~0.9, Airflow webserver ~0.7, scheduler ~0.44, Hive Metastore ~0.45, others < 0.1 each). Peak under a DAG run: not measured yet.
+Memory (`docker stats`): idle, all 7 services, 2026-11-22: ~2.7 GiB of 9.6 GiB (Trino ~0.9, Airflow webserver ~0.7, scheduler ~0.44, Hive Metastore ~0.45, others < 0.1 each). During a DAG run (2026-11-23, rerun `manual__2026-11-23T09:41:29` after dropping the 9 Bronze tables, so all tables took the CTAS path; ~18 s): peak total **4.99 GiB of 9.6 GiB**, up from 4.34 GiB just before the run. Peaks per service: Trino 2.13, Airflow scheduler 1.19, Airflow webserver 0.98, Hive Metastore 0.61, others < 0.2 each. The scheduler accounts for most of the rise (task processes). Sampled every 4–5 s (5 samples inside the run), so a short spike may have been missed. Trino's idle memory is higher than on 2026-11-22 (2.1 vs ~0.9 GiB) because its JVM keeps heap it has already grown after queries. Reconciliation after this rerun: 9/9 PASS with numbers identical to #1.
 
 Reconciliation #1 output (2026-11-23, `.venv/bin/python scripts/reconcile_bronze.py`, exit code 0):
 
@@ -48,13 +48,12 @@ Source sums cross-checked directly in `psql` on `postgres_oltp` (bypassing Trino
 
 ## Next steps
 
-Tickets: `.scratch/phase-0/issues/` (02 and 03 can start now; 04 needs 01–03).
+Tickets: `.scratch/phase-0/issues/` (01 resolved; 02 and 03 can start now; 04 needs 02–03).
 
-1. Ticket 01: remaining items are peak memory during a DAG run and committing the script.
-2. Ticket 02 (owner): propose the redesigned step 6.
+1. Ticket 02 (owner): propose the redesigned step 6.
+2. Ticket 03: fix the `user_addresses` merge key (DAG change, needs approval).
 
 ## Pending decisions
 
 - Port binding in `docker-compose.yml`: all interfaces vs. `127.0.0.1`.
 - Wording of `### Skill precedence` in `CLAUDE.md`.
-- Commit of the current working tree as a clean baseline.
