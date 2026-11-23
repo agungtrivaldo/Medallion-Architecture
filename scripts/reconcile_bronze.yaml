@@ -1,0 +1,43 @@
+# Tables checked by scripts/reconcile_bronze.py.
+#
+# Written from the SOURCE schema (information_schema in postgres_oltp),
+# deliberately NOT copied from the DAG's TABLE dict: the checker must stay
+# independent of the pipeline it checks. Example: the DAG merges
+# user_addresses on user_id, but the source primary key is address_id.
+#
+# Per table:
+#   pk              primary key in the source; Bronze must have no duplicates
+#   amount_columns  money columns (NUMERIC in the source, DOUBLE in Bronze)
+#                   whose sums are compared; [] when the table has none
+#
+# This file holds data only (which tables, which columns). How each check
+# runs lives in the script.
+
+tables:
+  brands:
+    pk: brand_id
+    amount_columns: []
+  categories:
+    pk: category_id
+    amount_columns: []
+  products:
+    pk: product_id
+    amount_columns: [base_price]
+  users:
+    pk: user_id
+    amount_columns: []
+  user_addresses:
+    pk: address_id
+    amount_columns: []
+  orders:
+    pk: order_id
+    amount_columns: [total_amount]
+  order_items:
+    pk: item_id
+    amount_columns: [unit_price_at_purchase]
+  payments:
+    pk: payment_id
+    amount_columns: []
+  shipping:
+    pk: shipping_id
+    amount_columns: [shipping_cost]
