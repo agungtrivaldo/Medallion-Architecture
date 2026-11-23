@@ -1,0 +1,17 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# Jupyter autosave
+.ipynb_checkpoints/
+
+# Airflow runtime output (mounted into the containers)
+airflow_logs/
+
+# Secrets: keep real values local, commit only the template
+.env
+!.env.example
+
+# Local Claude Code settings
+.claude/settings.local.json
