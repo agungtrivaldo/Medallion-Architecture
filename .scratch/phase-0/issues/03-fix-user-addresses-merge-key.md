@@ -12,3 +12,8 @@
 - [ ] After an `INCREMENTAL` seed that touches at least one user with more than one address, the `user_addresses` upsert task succeeds.
 - [ ] Reconciliation passes for `user_addresses`, including Bronze `count(DISTINCT address_id)` = Bronze `count(*)`.
 - [ ] No other table's merge key changed.
+
+## Comments
+
+2026-11-24: fix applied with owner approval: `user_addresses` `primary_key` changed from `user_id` to `address_id` in `dags/etl_pipeline.py`; no other table's key changed. The pre-fix reproduction was skipped to save a full seed-and-run cycle; the post-fix proof is step 6 (run #2 `upsert_table_user_addresses` succeeds, reconciliation #2 passes for `user_addresses`).
+2026-11-24: verified. Run #2 `upsert_table_user_addresses` succeeded after an `INCREMENTAL` seed that added 67 addresses; reconciliation #2 PASS for `user_addresses` (15,143 rows = 15,143 distinct `address_id`). Runs #4 and #5 also succeeded.

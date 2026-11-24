@@ -1,6 +1,6 @@
 # Source data model
 
-Reference for the operational source database (`postgres_oltp`, database `oltp`, schema `public`) that the Bronze pipeline ingests. Everything here comes from `scripts/initial_data.py` and from queries against the seeded database.
+Reference for the operational source database (`postgres_oltp`, database `oltp`, schema `public`) that the Bronze pipeline ingests. Everything here comes from `scripts/initial_data.py` and from queries against the seeded database. For the Bronze tables built from it, see [bronze-data-model.md](bronze-data-model.md).
 
 Last checked: 2026-11-23, after an `INIT` seed.
 
@@ -54,7 +54,7 @@ Master data (`brands`, `categories`, `products`) changes rarely. Customer data (
 
 ### `INCREMENTAL` mode
 
-With `RUN_MODE = "INCREMENTAL"`, the script adds 50 users and 200 orders dated within the last day, then sets up to 100 `Pending` orders to `Completed` with `updated_at = NOW()`. Order IDs use the prefix `ORD-INCR-`.
+With `--mode incremental` (`python scripts/initial_data.py --mode incremental`), the script adds 50 users and 200 orders dated within the last day, then sets up to 100 `Pending` orders to `Completed` with `updated_at = NOW()`. Order IDs use the prefix `ORD-INCR-`.
 
 ## Intentional dirt
 
