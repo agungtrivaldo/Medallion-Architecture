@@ -1,3 +1,4 @@
+import argparse
 import psycopg2
 from psycopg2 import extras
 import random
@@ -14,7 +15,17 @@ DB_CONFIG = {
     'port': '5433'
 }
 
-RUN_MODE = "INIT" 
+# Required, no default: "init" drops and recreates every source table.
+parser = argparse.ArgumentParser(description="Seed the OLTP source database.")
+parser.add_argument(
+    "--mode",
+    required=True,
+    choices=["init", "incremental"],
+    help="init: drop and recreate all tables with initial data; "
+         "incremental: add new users/orders and update some pending orders",
+)
+RUN_MODE = parser.parse_args().mode.upper()
+
 NUM_USERS = 10_000 if RUN_MODE == "INIT" else 50 
 NUM_ORDERS = 50_000 if RUN_MODE == "INIT" else 200
 

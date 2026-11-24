@@ -148,7 +148,7 @@ TABLE = {
             LEFT JOIN postgres.public.users on users.user_id = user_addresses.user_id
             """,
         "watermark": "updated_at",
-        "primary_key": "user_id"
+        "primary_key": "address_id"
     },
 }
 
@@ -185,7 +185,10 @@ def etl_pipeline():
     @task
     def upsert_table(config,table,**context):
         trino_hook = TrinoHook(trino_conn_id="trino_conn")
-        get_cols = f"SELECT column_name FROM postgres.information_schema.columns WHERE table_schema = 'public' AND table_name = '{table}'"
+        # Bronze columns, not source columns: the query also produces joined
+        # columns (e.g. a parent's updated_at) and metadata (_ingested_at,
+        # _source_system) that the source table does not have.
+        get_cols = f"SELECT column_name FROM iceberg.information_schema.columns WHERE table_schema = 'bronze' AND table_name = '{table}' ORDER BY ordinal_position"
         records = trino_hook.get_records(get_cols)
         cols = [row[0] for row in records]
         primary_key =  config["primary_key"]
