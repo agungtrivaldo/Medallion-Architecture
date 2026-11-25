@@ -120,9 +120,15 @@ services:
       - ./airflow_plugins:/opt/airflow/plugins
       - /var/run/docker.sock:/var/run/docker.sock
       - /home/agung/medalion/Medallion-Architecture/dbt_config:/opt/airflow/dbt_config
+    # The webserver's pid file lives in the container's writable layer, so it
+    # survives `docker compose stop`/`start`. If its old PID belongs to a live
+    # process after a restart, gunicorn refuses to start ("Already running on
+    # PID ..."). Remove it before every start; -f keeps a fresh container (no
+    # file yet) from breaking the && chain.
     command: >
       bash -c "airflow db migrate &&
               airflow users create --username admin --password admin --firstname Admin --lastname User --role Admin --email admin@example.com &&
+              rm -f /opt/airflow/airflow-webserver.pid &&
               exec airflow webserver"
 
   airflow-scheduler:
