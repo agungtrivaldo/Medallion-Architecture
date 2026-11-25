@@ -2,56 +2,49 @@
 
 Snapshot of where the project is. Definitions and acceptance criteria live in the spec; this file only points at them.
 
-Last updated: 2026-11-24
+Last updated: 2026-11-25
 
 ## Active
 
 - **Phase:** 0, Foundation & Stabilization (`docs/vision.md`)
-- **Milestone:** M0.1, Reproducible core stack + verified Bronze baseline ([spec](.scratch/phase-0/spec.md))
+- **Milestone:** M0.1, Reproducible core stack + verified Bronze baseline ([spec](.scratch/phase-0/spec.md)). **Acceptance run (ticket 04) passed 2026-11-25; awaiting owner sign-off to mark M0.1 done.**
 
-## M0.1 progress
+## M0.1 acceptance run (ticket 04), 2026-11-25
 
-| Step | State |
+One uninterrupted run from `docker compose down -v`, no edits to tracked files during the run. Step 4 uses the unpause procedure agreed on 2026-11-25 (spec Part 3).
+
+| Step | Result |
 |---|---|
-| 0. Docker reachable from WSL | Passed 2026-11-22: user added to `docker` group; `docker ps` succeeds |
-| 1. Core stack up | Passed 2026-11-22 from clean state (`down -v`, then `up -d`): all services running, `hive-metastore` started first time with 0 restarts. Fixes: `HADOOP_OPTIONAL_TOOLS: hadoop-aws`; Postgres `healthcheck` + `condition: service_healthy` for `hive-metastore`, `airflow`, `airflow-scheduler`. Full stack ready in ~165 s |
-| 2. Bootstrap | Passed 2026-11-22 from clean state: one-shot `bootstrap` service (`bootstrap/bootstrap.sh`) creates bucket `warehouse` and `iceberg.bronze` at `s3a://warehouse/`; rerun exits 0 (idempotent). `trino_conn` comes from `AIRFLOW_CONN_TRINO_CONN`. Needed a longer Trino healthcheck `start_period` (Trino took ~1 min to start with the full stack) |
-| 3. Seed source | Passed 2026-11-22: 9 tables populated (counts in the spec's findings log) |
-| 4. DAG run #1 | Passed 2026-11-23 (run `manual__2026-11-23T06:46:28`): 9 `table_checking_*` and 9 `create_table_*` (CTAS) tasks succeeded; `upsert_table_*` skipped as expected. `dbt_ingest_silver` failed with `dbt: command not found` (exit 127), out of scope (M0.2). No S3 errors in Hive Metastore or Trino logs; data files under `s3a://warehouse/`. Peak memory measured on a CTAS rerun (see Memory below) |
-| 5. Reconciliation #1 | Passed 2026-11-23 with `scripts/reconcile_bronze.py`, tables listed in `scripts/reconcile_bronze.yaml` (output below). Negative check also run: a wrong PK (`user_id` for `user_addresses`) and a missing table both FAIL with exit code 1 |
-| 6. MERGE + idempotency test | Development run passed 2026-11-24 (details in the spec's findings log): reconciliation #2 9/9, 100/100 updates landed, idempotency 9/9 (`_ingested_at` excluded by design). Found and fixed a `MERGE` defect (Bronze-only columns `NULL`/stale); re-verified with runs #4–#5. The official pass is ticket 04 |
+| 0. Docker reachable | PASS: `docker ps` succeeds |
+| 1. Stack up | PASS: all services running after `up -d`. Memory just after start, idle: ~2.2 GiB of 9.6 GiB (Trino 1.0, Hive Metastore 0.59, others < 0.2; Airflow still starting) |
+| 2. Bootstrap | PASS: `bootstrap` exited 0; `SHOW SCHEMAS FROM iceberg` lists `bronze` |
+| 3. Seed `--mode init` | PASS: 9 tables populated (users 10,000; user_addresses 15,003; orders 50,000; order_items 105,041; payments/shipping 41,629; products 8; brands 8; categories 5). Counts differ from 2026-11-22 because the seed is random |
+| 4. Unpause, run #1 | PASS: DAG was paused after `up` (as expected); `airflow dags unpause` made the scheduler create `scheduled__2026-11-24T00:00:00+00:00`. 9 `table_checking` + 9 `create_table` succeeded, 9 `upsert_table` skipped, `dbt_ingest_silver` failed (expected, M0.2) |
+| 5. Reconciliation #1 | PASS 9/9, exit 0 |
+| 6a. Seed `--mode incremental` | PASS: 50 users, 200 orders added, 100 orders updated |
+| 6b. Run #2 | PASS: `manual__2026-11-25T04:00:57+00:00`, `data_interval_start` 2026-11-24 00:00 UTC. 6 `upsert_table` (MERGE), 3 `create_table` |
+| 6c. Validity guard | VALID: 200 `ORD-INCR-` (INSERT branch), 100 `ORD-INIT-` (UPDATE branch) |
+| 6d. Reconciliation #2 | PASS 9/9, exit 0 (users 10,050; user_addresses 15,074; orders 50,200; order_items 105,467; payments/shipping 41,796). Extra: 0 `NULL` `_ingested_at`/`_source_system`/`updated_at` in the 6 MERGE tables (2026-11-24 defect did not return) |
+| 6e. Capture | Done: 9 snapshot IDs saved |
+| 6f. Run #3 | PASS: `manual__2026-11-25T04:12:43+00:00`, same paths as 6b |
+| 6g. Idempotency | PASS 9/9: counts equal, unique PK, two-way `EXCEPT` 0/0 (`_ingested_at` excluded). Negative check: with `_ingested_at` included, `orders` differs on 300 rows, as expected |
+| 7. Pause | PASS: `airflow dags list` shows `etl_pipeline` paused |
 
-Memory (`docker stats`): idle, all 7 services, 2026-11-22: ~2.7 GiB of 9.6 GiB (Trino ~0.9, Airflow webserver ~0.7, scheduler ~0.44, Hive Metastore ~0.45, others < 0.1 each). During a DAG run (2026-11-23, rerun `manual__2026-11-23T09:41:29` after dropping the 9 Bronze tables, so all tables took the CTAS path; ~18 s): peak total **4.99 GiB of 9.6 GiB**, up from 4.34 GiB just before the run. Peaks per service: Trino 2.13, Airflow scheduler 1.19, Airflow webserver 0.98, Hive Metastore 0.61, others < 0.2 each. The scheduler accounts for most of the rise (task processes). Sampled every 4–5 s (5 samples inside the run), so a short spike may have been missed. Trino's idle memory is higher than on 2026-11-22 (2.1 vs ~0.9 GiB) because its JVM keeps heap it has already grown after queries. Reconciliation after this rerun: 9/9 PASS with numbers identical to #1.
+Peak memory across the run (`docker stats` every ~4 s, 231 samples, 10:57–11:14 WIB): **4.90 GiB of 9.6 GiB** total, during run #2. Per-service peaks: Trino 2.15, Airflow scheduler 1.15, Airflow webserver 0.92, Hive Metastore 0.75, others < 0.2 each.
 
-Reconciliation #1 output (2026-11-23, `.venv/bin/python scripts/reconcile_bronze.py`, exit code 0):
-
-```
-table             src_rows  brz_rows  unique_pk  money_column                         src_sum             brz_sum      diff  result
-brands                   8         8          8  -                                          -                   -         -    PASS
-categories               5         5          5  -                                          -                   -         -    PASS
-products                 8         8          8  base_price                     51,298,000.00       51,298,000.00      0.00    PASS
-users                10000     10000      10000  -                                          -                   -         -    PASS
-user_addresses       15076     15076      15076  -                                          -                   -         -    PASS
-orders               50000     50000      50000  total_amount              929,476,148,000.00  929,476,148,000.00      0.00    PASS
-order_items         104854    104854     104854  unit_price_at_purchase    665,335,368,000.00  665,335,368,000.00      0.00    PASS
-payments             41726     41726      41726  -                                          -                   -         -    PASS
-shipping             41726     41726      41726  shipping_cost               2,400,672,000.00    2,400,672,000.00      0.00    PASS
-
-Sums: diff = brz_sum - src_sum; a sum passes when |diff| <= 1 rupiah.
-```
-
-Source sums cross-checked directly in `psql` on `postgres_oltp` (bypassing Trino): identical.
+Earlier per-step development results (2026-11-22 to 2026-11-24) are in the spec's findings log.
 
 ## Findings
 
-- 2026-11-23: restarting an existing stack (start without `down`) fails the `airflow` webserver with `Already running on PID 48 (or pid file '/opt/airflow/airflow-webserver.pid' is stale)`. The pid file survives in the container's writable layer. Workaround: `docker compose up -d --force-recreate airflow`. Permanent fix not decided (needs a `docker-compose.yml` change).
+- 2026-11-23: restarting an existing stack (start without `down`) fails the `airflow` webserver with `Already running on PID 48 (or pid file '/opt/airflow/airflow-webserver.pid' is stale)`. The pid file survives in the container's writable layer. Fixed 2026-11-25 (owner-approved `docker-compose.yml` change): the `airflow` command runs `rm -f /opt/airflow/airflow-webserver.pid` before `exec airflow webserver`. Validated: with the old command, a pid file holding a live PID (`1`) reproduced the exact error and exit 1; with the fix, a fresh container (no pid file), the same forced stale pid file, and a plain `stop`/`start` all reached `/health` 200 with no `Already running` error. A normal `stop`/`start` on 2026-11-25 had worked even before the fix, which fits the failure depending on whether the old PID happens to be in use (assumption).
+- 2026-11-25: input for M0.2. About 87 s of each Airflow start is `pip install` of `_PIP_ADDITIONAL_REQUIREMENTS` (from the container log), repeated on every start. M0.2 must add dbt to the Airflow image anyway; a custom image would remove both. Not done now.
 
 ## Next steps
 
-Tickets: `.scratch/phase-0/issues/` (01 resolved; 02, 03, 05 done pending owner review; 06 wontfix). Nothing from 2026-11-24 is committed yet.
+Tickets: `.scratch/phase-0/issues/` (01 resolved; 02, 03, 04, 05 done pending owner review; 06 wontfix). The 2026-11-25 changes (spec step 4/7, this file, ticket 04) are not committed yet.
 
-1. Owner reviews and commits the 2026-11-24 changes (DAG fixes, `--mode`, spec, `docs/bronze-data-model.md`).
-2. Ticket 04: full acceptance run from `docker compose down -v` (destroys all data, needs approval at that point).
+1. Owner reviews the acceptance results, closes tickets 02–05, and signs off M0.1.
+2. Then plan M0.2 (dbt / Silver).
 
 ## Pending decisions
 

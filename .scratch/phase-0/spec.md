@@ -26,7 +26,7 @@ M0.1 is done when every step passes, in order, on a single run-through from a cl
 | 1 | Start the stack: `docker compose up -d` | All services run with no manual edits to tracked files. Memory from `docker stats` is recorded in `PROJECT_STATUS.md`. |
 | 2 | Bootstrap (runs automatically as the one-shot `bootstrap` service) | `bootstrap` exits 0, and `SHOW SCHEMAS FROM iceberg` lists `bronze`. |
 | 3 | Seed the source: `python scripts/initial_data.py --mode init` | The script succeeds and all 9 source tables in `postgres_oltp` are populated. |
-| 4 | Trigger DAG `etl_pipeline` (run #1) | Every Bronze task succeeds; all 9 tables take the `create_table` (CTAS) path. `dbt_ingest_silver` is out of scope and expected to fail. |
+| 4 | Unpause the DAG: `airflow dags unpause etl_pipeline` (in the `airflow` container). On a fresh metadata database every DAG starts paused, and a paused DAG runs nothing, not even a manual trigger. On unpause the scheduler creates one scheduled run for the latest completed `@daily` interval (`catchup=False`); that run is run #1. Do not also trigger it manually. | Run #1 is created by the scheduler. Every Bronze task succeeds; all 9 tables take the `create_table` (CTAS) path. `dbt_ingest_silver` is out of scope and expected to fail. |
 | 5 | Reconciliation #1 | All reconciliation checks pass for all 9 tables. |
 | 6a | Change the source: `python scripts/initial_data.py --mode incremental` | The script succeeds. |
 | 6b | Trigger `etl_pipeline` (run #2) | Every Bronze task succeeds. The 6 tables with an `updated_at` watermark (`users`, `user_addresses`, `orders`, `order_items`, `payments`, `shipping`) take the `upsert_table` (`MERGE`) path. `brands`, `categories`, and `products` have no watermark and take CTAS again. |
@@ -35,6 +35,7 @@ M0.1 is done when every step passes, in order, on a single run-through from a cl
 | 6e | Capture (manual Trino queries, see Idempotency check) | The current Iceberg snapshot ID of each of the 9 Bronze tables is saved to a file. |
 | 6f | Trigger `etl_pipeline` again with no source change in between (run #3) | Every Bronze task succeeds, on the same paths as 6b. |
 | 6g | Idempotency check (manual Trino queries, see Idempotency check) | Passes for all 9 tables (see Idempotency check). |
+| 7 | Pause the DAG: `airflow dags pause etl_pipeline` | `airflow dags list` shows `etl_pipeline` paused, so no scheduled run starts after the test or after a later `down`/`up` without `-v`. |
 
 Step 6 proves two separate things: `MERGE` correctness (6a–6d: new and updated source rows land in Bronze) and idempotency (6e–6g: a rerun with no source change leaves Bronze's content unchanged). The original step 6, a rerun straight after the `INIT` seed, would pass vacuously because no `INIT` row falls inside the `MERGE` filter (see the 2026-11-22 seed finding in Part 3); step 6c exists so that no check can pass on zero rows.
 
@@ -182,3 +183,15 @@ With owner approval, `upsert_table` now takes its column list from the Bronze ta
 
 - Run #4 `manual__2026-11-24T08:15:50+00:00` (no source change; the broken rows were still inside the filter window, so `MERGE` rewrote them). Afterwards, across the 6 `MERGE` tables: 0 rows with `NULL` `_ingested_at`, `_source_system`, or `updated_at`; 0 child rows (`order_items`, `payments`, `shipping`) whose `updated_at` differs from their order's; 0 `user_addresses` rows whose `created_at`/`updated_at` differ from their user's. Reconciliation 9/9 PASS.
 - Idempotency re-run: capture after run #4, run #5 `manual__2026-11-24T08:27:05+00:00`, compare with `_ingested_at` excluded: 9/9 PASS (counts equal, unique PK, two-way `EXCEPT` 0/0). With `_ingested_at` included, `orders` differs on 300 rows (200 `ORD-INCR-` + 100 updated, the rows inside the window), as expected.
+
+### 2026-11-24: First acceptance attempt stopped at step 4 (DAG paused)
+
+Ticket 04 attempt from `down -v`: steps 0–3 passed, then run #1 (manual trigger) stayed `queued` for 10 minutes. Cause: on a fresh Airflow metadata database every DAG is paused (`dags_are_paused_at_creation = True`, the default), and a paused DAG does not start any run, manual ones included. The 2026-11-22 clean run most likely relied on an unrecorded unpause in the UI. Owner decision (2026-11-25): step 4 becomes `airflow dags unpause etl_pipeline`, with the resulting scheduled run as run #1, and a new step 7 pauses the DAG again. Rejected: `AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION=false` (infrastructure change; the DAG would run before the seed) and `schedule=None` (a manual run's data interval would start at the trigger time, so the `MERGE` filter would likely select 0 rows; assumption).
+
+### 2026-11-25: M0.1 acceptance run (ticket 04) passed
+
+From `docker compose down -v`, steps 0–7 passed in one run with no edits to tracked files during the run. Results and memory are in `PROJECT_STATUS.md`. Facts learned:
+
+- Unpausing a freshly created DAG made the scheduler create exactly one run, `scheduled__2026-11-24T00:00:00+00:00`, within seconds; this confirms the step 4 assumption. No second scheduled run appeared during the test.
+- The table printed by `airflow dags unpause` showed `True`; `airflow dags list` right afterwards showed `paused = False`, and the run started. Trust `airflow dags list`, not the unpause output.
+- `airflow dags state` takes an execution date, not a run ID; poll `airflow dags list-runs -d etl_pipeline` and match the full run ID instead.
